@@ -1,0 +1,2 @@
+[build]
+rustflags = ['--cfg', 'chacha20_backend="avx2"', '-C', 'target-cpu=native']

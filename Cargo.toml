@@ -1,0 +1,17 @@
+[package]
+name = "zsc"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
+clap = { version = "4", features = ["derive"] }
+rand = "0.9"
+rpassword = "7"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
