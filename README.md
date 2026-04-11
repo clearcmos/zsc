@@ -4,7 +4,7 @@ Fast encrypted compressed archives. Combines zstd compression with XChaCha20-Pol
 
 ## Why
 
-Existing options are either slow (zip, 7z), lack authenticated encryption (openssl enc), or don't exist as a single tool (tar | zstd | age requires gluing three commands together). zsc produces a single `.zsc` file with proper AEAD -- every chunk is independently authenticated, so tampered or corrupted data is detected immediately.
+Existing options either lack authenticated encryption (openssl enc), require gluing multiple commands together (tar | zstd | age), or are significantly slower (zip takes ~12x longer on the same data). zsc produces a single `.zsc` file with proper AEAD -- every chunk is independently authenticated, so tampered or corrupted data is detected immediately.
 
 ## Performance
 
