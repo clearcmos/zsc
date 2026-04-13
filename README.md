@@ -36,14 +36,17 @@ rustflags = ['--cfg', 'chacha20_backend="avx2"', '-C', 'target-cpu=native']
 ## Usage
 
 ```
-# Encrypt a directory
-zsc -e photos/
+# Encrypt a directory (auto-detected)
+zsc photos/
+
+# Encrypt a single file
+zsc document.pdf
 
 # Encrypt with custom output path
 zsc -e photos/ photos-backup.zsc
 
-# Decrypt and extract
-zsc -d photos.zsc
+# Decrypt and extract (auto-detected by .zsc extension)
+zsc photos.zsc
 
 # Decrypt and extract to a specific directory
 zsc -d photos.zsc /mnt/restore
@@ -55,6 +58,22 @@ zsc --explore photos.zsc
 zsc -e backup/ --passphrase-fd 3 3<<< "$PASSWORD"
 zsc -d backup.zsc /mnt/restore --passphrase-fd 3 3<<< "$PASSWORD"
 ```
+
+### Bitwarden integration (optional)
+
+If you use [Bitwarden CLI](https://bitwarden.com/help/cli/) (or a wrapper like `bwbio`), zsc can fetch the passphrase automatically. Create `~/.config/zsc/config.toml`:
+
+```toml
+bw_item = "your-item-name-or-uuid"
+```
+
+With this set, zsc skips the passphrase prompt and runs `bwbio get password <bw_item>` instead. You can also pass it per-command with `--bw`:
+
+```
+zsc photos/ --bw "my-archive-key"
+```
+
+This is entirely optional - without the config file or `bwbio` on PATH, zsc prompts interactively as usual.
 
 ## File Format
 
@@ -88,18 +107,6 @@ The plaintext stream is a zstd-compressed tar archive. Each chunk uses a unique 
 - **Corruption**: Detected at the exact chunk that was tampered with.
 
 These are the same primitives used by age, WireGuard, and libsodium.
-
-## KDE Integration
-
-zsc includes a Dolphin file manager integration for double-click decrypt/extract:
-
-- MIME type registration for `.zsc` files (with magic byte detection)
-- `.desktop` file that launches a wrapper script
-- KDE password dialog (kdialog)
-- Action picker: "Extract Here", "Extract To...", or "Explore in Ark"
-- Explore mode decrypts to tmpfs (/dev/shm) so unencrypted data never touches disk
-
-See the wrapper scripts in the companion [arch](https://github.com/nicholasgasior/arch) repo under `bin/decrypt-extract` and `bin/qt-menu`.
 
 ## License
 

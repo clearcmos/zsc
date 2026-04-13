@@ -8,9 +8,9 @@ use anyhow::{bail, Context, Result};
 use crate::crypto;
 use crate::format::{ZscHeader, CHUNK_PLAINTEXT_SIZE};
 
-pub fn seal(directory: &Path, output: &Path, passphrase: &str) -> Result<()> {
-    if !directory.is_dir() {
-        bail!("not a directory: {}", directory.display());
+pub fn seal(input: &Path, output: &Path, passphrase: &str) -> Result<()> {
+    if !input.exists() {
+        bail!("not found: {}", input.display());
     }
     if output.exists() {
         bail!("output already exists: {}", output.display());
@@ -32,10 +32,16 @@ pub fn seal(directory: &Path, output: &Path, passphrase: &str) -> Result<()> {
 
     // Use external tar | zstd pipeline for maximum throughput.
     // zstd -T0 uses all cores and its internal job scheduler works best this way.
-    let mut tar_proc = Command::new("tar")
-        .args(["cf", "-", "-C"])
-        .arg(directory)
-        .arg(".")
+    let mut tar_cmd = Command::new("tar");
+    tar_cmd.args(["cf", "-"]);
+    if input.is_dir() {
+        tar_cmd.arg("-C").arg(input).arg(".");
+    } else {
+        let parent = input.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
+        let name = input.file_name().context("invalid input path")?;
+        tar_cmd.arg("-C").arg(parent).arg(name);
+    }
+    let mut tar_proc = tar_cmd
         .stdout(Stdio::piped())
         .spawn()
         .context("failed to spawn tar")?;
@@ -87,7 +93,11 @@ pub fn seal(directory: &Path, output: &Path, passphrase: &str) -> Result<()> {
         bail!("zstd failed with {zstd_status}");
     }
 
-    let input_size = dir_size(directory);
+    let input_size = if input.is_dir() {
+        dir_size(input)
+    } else {
+        std::fs::metadata(input).map(|m| m.len()).unwrap_or(0)
+    };
     let output_size = std::fs::metadata(output)?.len();
     let ratio = if input_size > 0 {
         (1.0 - output_size as f64 / input_size as f64) * 100.0

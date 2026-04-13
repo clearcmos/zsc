@@ -16,15 +16,15 @@ External `tar`/`zstd` processes are used intentionally -- zstd's multi-threaded 
 
 ```
 src/
-  main.rs      -- CLI (clap derive), passphrase reading from TTY or fd, dispatch
+  main.rs      -- CLI (clap derive), config file loading, passphrase resolution (bw/fd/tty), dispatch
   format.rs    -- ZscHeader: magic bytes, Argon2id params, salt, nonce, serialize/deserialize
   crypto.rs    -- Argon2id KDF, XChaCha20-Poly1305 chunk encrypt/decrypt, nonce derivation
-  seal.rs      -- Seal command: spawn tar|zstd, read chunks, encrypt, write .zsc
+  seal.rs      -- Seal command: spawn tar|zstd (files or directories), read chunks, encrypt, write .zsc
   open.rs      -- Open command: read .zsc, decrypt chunks, pipe to zstd|tar
   explore.rs   -- Explore command: decrypt to /dev/shm, xdg-open, cleanup
 ```
 
-~600 lines total. No unsafe code except `from_raw_fd` for `--passphrase-fd`.
+No unsafe code except `from_raw_fd` for `--passphrase-fd`.
 
 ## Build
 
@@ -44,9 +44,19 @@ The `.cargo/config.toml` enables AVX2 for the ChaCha20 backend and native CPU tu
 - **Argon2id** over PBKDF2/scrypt: memory-hard, GPU-resistant, modern standard. Params stored in header for forward compatibility.
 - **1 MiB chunks**: balances per-chunk overhead vs memory usage. Each chunk independently authenticated for corruption localization.
 
+## Config File
+
+Optional `~/.config/zsc/config.toml` with a single field:
+
+```toml
+bw_item = "item-name-or-uuid"
+```
+
+When set, passphrase is fetched via `bwbio get password <bw_item>` instead of prompting. The `--bw` CLI flag overrides this, and `--passphrase-fd` bypasses both. Requires `bwbio` (Bitwarden CLI wrapper) on PATH. Entirely optional - without it, behavior is unchanged.
+
 ## Dependencies
 
-All crypto is from audited RustCrypto crates (`chacha20poly1305`, `argon2`). No custom cryptographic code.
+All crypto is from audited RustCrypto crates (`chacha20poly1305`, `argon2`). No custom cryptographic code. Config/CLI uses `serde`, `toml`, `dirs`, `clap`.
 
 ## Integration
 
@@ -58,7 +68,9 @@ The companion `~/arch` repo contains KDE Dolphin integration:
 
 ## Key Conventions
 
-- Runtime dependencies: `tar`, `zstd`, `fuser`, `xdg-open` must be on PATH.
+- Seal accepts both files and directories. Auto-detect: `.zsc` extension means decrypt, anything else means encrypt.
+- Passphrase resolution: `--passphrase-fd` > `--bw` flag > `bw_item` config > interactive TTY prompt.
+- Runtime dependencies: `tar`, `zstd`, `fuser`, `xdg-open` must be on PATH. `bwbio` only needed if using Bitwarden integration.
 - Error messages are user-facing: "wrong passphrase", "archive corrupted", "archive truncated".
 - Exit code 0 on success, 1 on any error.
 - Passphrase never logged or printed. Cleared from memory after key derivation (Rust String drop).
