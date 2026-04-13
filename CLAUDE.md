@@ -46,17 +46,18 @@ The `.cargo/config.toml` enables AVX2 for the ChaCha20 backend and native CPU tu
 
 ## Config File
 
-Optional `~/.config/zsc/config.toml` with a single field:
+Optional `~/.config/zsc/config.toml`:
 
 ```toml
+bw_cmd = "bwbio"
 bw_item = "item-name-or-uuid"
 ```
 
-When set, passphrase is fetched via `bwbio get password <bw_item>` instead of prompting. The `--bw` CLI flag overrides this, and `--passphrase-fd` bypasses both. Requires `bwbio` (Bitwarden CLI wrapper) on PATH. Entirely optional - without it, behavior is unchanged.
+When `bw_item` is set, passphrase is fetched from Bitwarden instead of prompting. Friendly names use `bw list items --search` with exact JSON matching; UUIDs use the direct `bw get password` path. `bw_cmd` defaults to `bw` if omitted. The `--bw` CLI flag overrides `bw_item`, and `--passphrase-fd` bypasses both. Entirely optional - without it, behavior is unchanged.
 
 ## Dependencies
 
-All crypto is from audited RustCrypto crates (`chacha20poly1305`, `argon2`). No custom cryptographic code. Config/CLI uses `serde`, `toml`, `dirs`, `clap`.
+All crypto is from audited RustCrypto crates (`chacha20poly1305`, `argon2`). No custom cryptographic code. Config/CLI uses `serde`, `serde_json`, `toml`, `dirs`, `clap`.
 
 ## Integration
 

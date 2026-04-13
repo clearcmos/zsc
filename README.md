@@ -61,19 +61,28 @@ zsc -d backup.zsc /mnt/restore --passphrase-fd 3 3<<< "$PASSWORD"
 
 ### Bitwarden integration (optional)
 
-If you use [Bitwarden CLI](https://bitwarden.com/help/cli/) (or a wrapper like `bwbio`), zsc can fetch the passphrase automatically. Create `~/.config/zsc/config.toml`:
+If you use [Bitwarden CLI](https://bitwarden.com/help/cli/), zsc can fetch the passphrase automatically. Create `~/.config/zsc/config.toml`:
 
 ```toml
-bw_item = "your-item-name-or-uuid"
+bw_item = "my-archive-key"
 ```
 
-With this set, zsc skips the passphrase prompt and runs `bwbio get password <bw_item>` instead. You can also pass it per-command with `--bw`:
+The item can be a friendly name or a UUID. Friendly names use `bw list items` with exact matching, so they work even when the name is a substring of other items. UUIDs use the faster `bw get password` path.
+
+If you use a CLI wrapper instead of `bw` directly, set `bw_cmd`:
+
+```toml
+bw_cmd = "bwbio"
+bw_item = "my-archive-key"
+```
+
+You can also pass it per-command with `--bw`:
 
 ```
 zsc photos/ --bw "my-archive-key"
 ```
 
-This is entirely optional - without the config file or `bwbio` on PATH, zsc prompts interactively as usual.
+This is entirely optional - without the config file or `bw` on PATH, zsc prompts interactively as usual.
 
 ## File Format
 
