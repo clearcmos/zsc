@@ -49,11 +49,14 @@ The `.cargo/config.toml` enables AVX2 for the ChaCha20 backend and native CPU tu
 Optional `~/.config/zsc/config.toml`:
 
 ```toml
-bw_cmd = "bwbio"
+passphrase_cmd = "bwfetch zsc password"
 bw_item = "item-name-or-uuid"
 ```
 
-When `bw_item` is set, passphrase is fetched from Bitwarden instead of prompting. Friendly names use `bw list items --search` with exact JSON matching; UUIDs use the direct `bw get password` path. `bw_cmd` defaults to `bw` if omitted. The `--bw` CLI flag overrides `bw_item`, and `--passphrase-fd` bypasses both. Entirely optional - without it, behavior is unchanged.
+- `passphrase_cmd`: arbitrary shell command that prints the passphrase to stdout. Works with any secret manager.
+- `bw_item`: fetch passphrase from the standard Bitwarden CLI (`bw`). Friendly names use `bw list items --search` with exact JSON matching; UUIDs use the direct `bw get password` path.
+
+Priority: `--passphrase-fd` > `--bw` CLI flag > `passphrase_cmd` config > `bw_item` config > interactive TTY prompt. Entirely optional - without config, behavior is unchanged.
 
 ## Dependencies
 

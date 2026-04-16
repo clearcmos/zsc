@@ -45,7 +45,7 @@ struct Cli {
 
 #[derive(Deserialize, Default)]
 struct Config {
-    bw_cmd: Option<String>,
+    passphrase_cmd: Option<String>,
     bw_item: Option<String>,
 }
 
@@ -70,17 +70,40 @@ fn is_uuid(s: &str) -> bool {
             })
 }
 
-fn read_passphrase_bw(cmd: &str, item: &str) -> Result<String> {
+fn read_passphrase_cmd(cmd: &str) -> Result<String> {
+    let output = Command::new("sh")
+        .args(["-c", cmd])
+        .output()
+        .with_context(|| format!("failed to run passphrase_cmd: {cmd}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("passphrase_cmd failed: {}", stderr.trim());
+    }
+
+    let pass = String::from_utf8(output.stdout)
+        .context("invalid UTF-8 from passphrase_cmd")?
+        .trim_end_matches('\n')
+        .to_string();
+
+    if pass.is_empty() {
+        bail!("passphrase_cmd returned an empty passphrase");
+    }
+
+    Ok(pass)
+}
+
+fn read_passphrase_bw(item: &str) -> Result<String> {
     if is_uuid(item) {
         // UUID: direct lookup
-        let output = Command::new(cmd)
+        let output = Command::new("bw")
             .args(["get", "password", item])
             .output()
-            .with_context(|| format!("failed to run {cmd} - is it installed?"))?;
+            .context("failed to run bw - is it installed?")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("{cmd} failed: {}", stderr.trim());
+            bail!("bw failed: {}", stderr.trim());
         }
 
         let pass = String::from_utf8(output.stdout)
@@ -89,20 +112,20 @@ fn read_passphrase_bw(cmd: &str, item: &str) -> Result<String> {
             .to_string();
 
         if pass.is_empty() {
-            bail!("{cmd} returned an empty password");
+            bail!("bw returned an empty password");
         }
 
         Ok(pass)
     } else {
         // Friendly name: list + exact match
-        let output = Command::new(cmd)
+        let output = Command::new("bw")
             .args(["list", "items", "--search", item])
             .output()
-            .with_context(|| format!("failed to run {cmd} - is it installed?"))?;
+            .context("failed to run bw - is it installed?")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("{cmd} failed: {}", stderr.trim());
+            bail!("bw failed: {}", stderr.trim());
         }
 
         let json: serde_json::Value = serde_json::from_slice(&output.stdout)
@@ -135,15 +158,25 @@ fn read_passphrase_bw(cmd: &str, item: &str) -> Result<String> {
     }
 }
 
-fn read_passphrase(fd: Option<i32>, bw_cmd: &str, bw: Option<&str>, confirm: bool) -> Result<String> {
-    let pass = if let Some(item) = bw {
-        read_passphrase_bw(bw_cmd, item)?
-    } else if let Some(fd) = fd {
+fn read_passphrase(
+    fd: Option<i32>,
+    bw: Option<&str>,
+    passphrase_cmd: Option<&str>,
+    bw_item: Option<&str>,
+    confirm: bool,
+) -> Result<String> {
+    let pass = if let Some(fd) = fd {
         let file = unsafe { std::fs::File::from_raw_fd(fd) };
         let mut reader = BufReader::new(file);
         let mut line = String::new();
         reader.read_line(&mut line)?;
         line.trim_end_matches('\n').to_string()
+    } else if let Some(item) = bw {
+        read_passphrase_bw(item)?
+    } else if let Some(cmd) = passphrase_cmd {
+        read_passphrase_cmd(cmd)?
+    } else if let Some(item) = bw_item {
+        read_passphrase_bw(item)?
     } else {
         let pass = rpassword::prompt_password("Passphrase: ")?;
         if confirm {
@@ -166,9 +199,8 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     let config = load_config();
 
-    // CLI --bw flag takes priority, then config file
-    let bw_cmd = config.bw_cmd.as_deref().unwrap_or("bw");
-    let bw_item = cli.bw.as_deref().or(config.bw_item.as_deref());
+    let passphrase_cmd = config.passphrase_cmd.as_deref();
+    let bw_item = config.bw_item.as_deref();
 
     let is_zsc = cli.input.extension().map_or(false, |e| e == "zsc");
     let encrypt = cli.encrypt
@@ -182,8 +214,9 @@ fn main() -> Result<()> {
 
     if encrypt {
         let input = &cli.input;
-        let confirm = cli.passphrase_fd.is_none() && bw_item.is_none();
-        let passphrase = read_passphrase(cli.passphrase_fd, bw_cmd, bw_item, confirm)?;
+        let auto = cli.bw.is_some() || passphrase_cmd.is_some() || bw_item.is_some();
+        let confirm = cli.passphrase_fd.is_none() && !auto;
+        let passphrase = read_passphrase(cli.passphrase_fd, cli.bw.as_deref(), passphrase_cmd, bw_item, confirm)?;
         let output = cli.output.unwrap_or_else(|| {
             let stem = if input.is_dir() {
                 input.file_name()
@@ -199,7 +232,7 @@ fn main() -> Result<()> {
         seal::seal(input, &output, &passphrase)?;
     } else if decrypt {
         let file = &cli.input;
-        let passphrase = read_passphrase(cli.passphrase_fd, bw_cmd, bw_item, false)?;
+        let passphrase = read_passphrase(cli.passphrase_fd, cli.bw.as_deref(), passphrase_cmd, bw_item, false)?;
         let output_dir = cli.output.unwrap_or_else(|| {
             let stem = file
                 .file_stem()
@@ -210,7 +243,7 @@ fn main() -> Result<()> {
         open::open(file, &output_dir, &passphrase)?;
     } else {
         let file = &cli.input;
-        let passphrase = read_passphrase(cli.passphrase_fd, bw_cmd, bw_item, false)?;
+        let passphrase = read_passphrase(cli.passphrase_fd, cli.bw.as_deref(), passphrase_cmd, bw_item, false)?;
         explore::explore(file, &passphrase)?;
     }
 
