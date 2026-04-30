@@ -12,7 +12,7 @@ rand = "0.9"
 rpassword = "7"
 dirs = "6"
 serde = { version = "1", features = ["derive"] }
-toml = "0.8"
+toml = "1.1"
 
 [profile.release]
 opt-level = 3
