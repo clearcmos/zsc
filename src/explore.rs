@@ -76,23 +76,45 @@ pub fn explore(file: &Path, passphrase: &str) -> Result<()> {
         .spawn()
         .context("failed to launch xdg-open")?;
 
-    thread::sleep(Duration::from_secs(1));
-
-    // Poll until no process has the file open
-    loop {
-        let status = Command::new("fuser")
-            .arg(&tmppath)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
-
-        match status {
-            Ok(s) if s.success() => thread::sleep(Duration::from_secs(2)),
-            _ => break,
+    // Wait for a viewer to appear with the tmpfile in its argv, then wait for
+    // it to exit. Polling argv (not open fds) is necessary because some
+    // viewers, e.g. Ark, only hold the file open while reading the central
+    // directory and reopen it on demand for previews/extraction.
+    let my_pid = std::process::id();
+    let startup_deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while std::time::Instant::now() < startup_deadline {
+        if viewer_running(&tmppath, my_pid) {
+            break;
         }
+        thread::sleep(Duration::from_millis(500));
+    }
+    while viewer_running(&tmppath, my_pid) {
+        thread::sleep(Duration::from_secs(2));
     }
 
     let _ = std::fs::remove_file(&tmppath);
     Ok(())
+}
+
+fn viewer_running(tmppath: &Path, my_pid: u32) -> bool {
+    let needle = tmppath.as_os_str().as_encoded_bytes();
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return false;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        let Ok(pid) = name.parse::<u32>() else { continue };
+        if pid == my_pid {
+            continue;
+        }
+        let Ok(cmdline) = std::fs::read(entry.path().join("cmdline")) else {
+            continue;
+        };
+        if cmdline.windows(needle.len()).any(|w| w == needle) {
+            return true;
+        }
+    }
+    false
 }
 

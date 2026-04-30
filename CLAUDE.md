@@ -8,7 +8,7 @@ Streaming pipeline -- data flows through without buffering the entire archive in
 
 - **Seal**: external `tar` + `zstd -T0` processes (for multi-core compression) pipe into the Rust binary which reads 1 MiB chunks, encrypts each with XChaCha20-Poly1305, and writes to the output file.
 - **Open**: Rust binary reads chunks from the `.zsc` file, decrypts, and pipes plaintext into external `zstd -d` + `tar x` processes.
-- **Explore**: Same as open but writes decrypted compressed stream to `/dev/shm/<name>.tar.zst` (tmpfs/RAM), opens with `xdg-open`, polls with `fuser`, and cleans up when the viewer closes.
+- **Explore**: Same as open but writes decrypted compressed stream to `/dev/shm/<name>.tar.zst` (tmpfs/RAM), opens with `xdg-open`, polls `/proc/*/cmdline` for a process holding the path in argv, and cleans up when that process exits. Argv-based tracking (not open-fd via `fuser`) is required because viewers like Ark only hold the file open while reading the central directory and reopen it on demand for previews/extraction.
 
 External `tar`/`zstd` processes are used intentionally -- zstd's multi-threaded compression performs significantly better in its own process than through the Rust `zstd` crate's streaming API due to internal job scheduling.
 
@@ -72,7 +72,7 @@ The companion `~/arch` repo contains KDE Dolphin integration:
 
 - Seal accepts both files and directories. Auto-detect: `.zsc` extension means decrypt, anything else means encrypt.
 - Passphrase resolution: `--passphrase-fd` > `passphrase_cmd` config > interactive TTY prompt.
-- Runtime dependencies: `tar`, `zstd`, `fuser`, `xdg-open` must be on PATH.
+- Runtime dependencies: `tar`, `zstd`, `xdg-open` must be on PATH.
 - Error messages are user-facing: "wrong passphrase", "archive corrupted", "archive truncated".
 - Exit code 0 on success, 1 on any error.
 - Passphrase never logged or printed. Cleared from memory after key derivation (Rust String drop).
