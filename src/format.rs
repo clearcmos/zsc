@@ -1,7 +1,7 @@
 use std::io::{self, Read, Write};
 
 use anyhow::{bail, Context, Result};
-use rand::Rng;
+use rand::RngExt;
 
 pub const MAGIC: &[u8; 4] = b"ZSC\x01";
 pub const SALT_LEN: usize = 16;
