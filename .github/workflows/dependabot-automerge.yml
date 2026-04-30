@@ -1,0 +1,69 @@
+name: Dependabot auto-merge
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve PR and bump severity
+        id: info
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          pr=$(gh api "repos/$REPO/commits/$SHA/pulls" --jq '.[0]')
+          number=$(jq -r '.number' <<<"$pr")
+          title=$(jq -r '.title' <<<"$pr")
+          echo "PR #$number: $title"
+
+          old_ver=$(grep -oP 'from \K[0-9]+(\.[0-9]+){1,2}' <<<"$title" | head -1)
+          new_ver=$(grep -oP 'to \K[0-9]+(\.[0-9]+){1,2}' <<<"$title" | head -1)
+          if [ -z "$old_ver" ] || [ -z "$new_ver" ]; then
+            echo "Could not parse versions; skipping."
+            echo "merge=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          old_major=${old_ver%%.*}
+          new_major=${new_ver%%.*}
+          if [ "$old_major" != "$new_major" ]; then
+            echo "Major bump ($old_ver -> $new_ver); skipping."
+            echo "merge=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Pre-1.0: a minor bump is breaking by Cargo's semver convention
+          if [ "$old_major" = "0" ]; then
+            old_minor=$(echo "$old_ver" | cut -d. -f2)
+            new_minor=$(echo "$new_ver" | cut -d. -f2)
+            if [ "$old_minor" != "$new_minor" ]; then
+              echo "Pre-1.0 minor bump ($old_ver -> $new_ver) is breaking; skipping."
+              echo "merge=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          echo "Safe bump; will merge."
+          echo "merge=true" >> "$GITHUB_OUTPUT"
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: Merge
+        if: steps.info.outputs.merge == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: gh pr merge "${{ steps.info.outputs.number }}" --repo "$REPO" --squash --delete-branch
