@@ -49,18 +49,16 @@ The `.cargo/config.toml` enables AVX2 for the ChaCha20 backend and native CPU tu
 Optional `~/.config/zsc/config.toml`:
 
 ```toml
-passphrase_cmd = "bwfetch zsc password"
-bw_item = "item-name-or-uuid"
+passphrase_cmd = "op read op://Personal/zsc/password"
 ```
 
-- `passphrase_cmd`: arbitrary shell command that prints the passphrase to stdout. Works with any secret manager.
-- `bw_item`: fetch passphrase from the standard Bitwarden CLI (`bw`). Friendly names use `bw list items --search` with exact JSON matching; UUIDs use the direct `bw get password` path.
+- `passphrase_cmd`: arbitrary shell command that prints the passphrase to stdout. Works with any secret manager (1Password `op`, `pass`, `secret-tool`, custom scripts, etc.).
 
-Priority: `--passphrase-fd` > `--bw` CLI flag > `passphrase_cmd` config > `bw_item` config > interactive TTY prompt. Entirely optional - without config, behavior is unchanged.
+Priority: `--passphrase-fd` > `passphrase_cmd` config > interactive TTY prompt. Entirely optional - without config, behavior is unchanged.
 
 ## Dependencies
 
-All crypto is from audited RustCrypto crates (`chacha20poly1305`, `argon2`). No custom cryptographic code. Config/CLI uses `serde`, `serde_json`, `toml`, `dirs`, `clap`.
+All crypto is from audited RustCrypto crates (`chacha20poly1305`, `argon2`). No custom cryptographic code. Config/CLI uses `serde`, `toml`, `dirs`, `clap`.
 
 ## Integration
 
@@ -73,8 +71,8 @@ The companion `~/arch` repo contains KDE Dolphin integration:
 ## Key Conventions
 
 - Seal accepts both files and directories. Auto-detect: `.zsc` extension means decrypt, anything else means encrypt.
-- Passphrase resolution: `--passphrase-fd` > `--bw` flag > `bw_item` config > interactive TTY prompt.
-- Runtime dependencies: `tar`, `zstd`, `fuser`, `xdg-open` must be on PATH. `bwbio` only needed if using Bitwarden integration.
+- Passphrase resolution: `--passphrase-fd` > `passphrase_cmd` config > interactive TTY prompt.
+- Runtime dependencies: `tar`, `zstd`, `fuser`, `xdg-open` must be on PATH.
 - Error messages are user-facing: "wrong passphrase", "archive corrupted", "archive truncated".
 - Exit code 0 on success, 1 on any error.
 - Passphrase never logged or printed. Cleared from memory after key derivation (Rust String drop).
