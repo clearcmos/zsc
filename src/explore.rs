@@ -15,6 +15,7 @@ pub fn explore(file: &Path, passphrase: &str) -> Result<()> {
         File::open(file).with_context(|| format!("cannot open {}", file.display()))?,
     );
     let header = ZscHeader::read_from(&mut input)?;
+    let aad = header.serialize();
 
     eprint!("deriving key...");
     let key = crypto::derive_key(passphrase, &header)?;
@@ -43,8 +44,7 @@ pub fn explore(file: &Path, passphrase: &str) -> Result<()> {
 
     let result = (|| -> Result<()> {
         loop {
-            let chunk_len = format::read_chunk_len(&mut input)
-                .context("archive is truncated")?;
+            let chunk_len = format::read_chunk_len(&mut input).context("archive is truncated")?;
             if chunk_len == 0 {
                 break;
             }
@@ -53,7 +53,7 @@ pub fn explore(file: &Path, passphrase: &str) -> Result<()> {
                 .read_exact(&mut ciphertext)
                 .context("archive is truncated")?;
             let plaintext =
-                crypto::decrypt_chunk(&cipher, &header.nonce, counter, &ciphertext)?;
+                crypto::decrypt_chunk(&cipher, &header.nonce, counter, &ciphertext, &aad)?;
             tmpfile.write_all(&plaintext)?;
             counter += 1;
         }
@@ -104,7 +104,9 @@ fn viewer_running(tmppath: &Path, my_pid: u32) -> bool {
     for entry in entries.flatten() {
         let name = entry.file_name();
         let Some(name) = name.to_str() else { continue };
-        let Ok(pid) = name.parse::<u32>() else { continue };
+        let Ok(pid) = name.parse::<u32>() else {
+            continue;
+        };
         if pid == my_pid {
             continue;
         }
@@ -117,4 +119,3 @@ fn viewer_running(tmppath: &Path, my_pid: u32) -> bool {
     }
     false
 }
-

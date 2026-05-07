@@ -2,6 +2,12 @@
 name = "zsc"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Fast encrypted compressed archive tool (XChaCha20-Poly1305 + zstd + Argon2id)"
+repository = "https://github.com/clearcmos/zsc"
+readme = "README.md"
+keywords = ["encryption", "compression", "archive", "zstd", "chacha20"]
+categories = ["command-line-utilities", "compression", "cryptography"]
 
 [dependencies]
 anyhow = "1"
@@ -13,6 +19,7 @@ rpassword = "7"
 dirs = "6"
 serde = { version = "1", features = ["derive"] }
 toml = "1.1"
+zeroize = { version = "1", features = ["alloc"] }
 
 [profile.release]
 opt-level = 3

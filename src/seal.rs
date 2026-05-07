@@ -17,6 +17,7 @@ pub fn seal(input: &Path, output: &Path, passphrase: &str) -> Result<()> {
     }
 
     let header = ZscHeader::generate();
+    let aad = header.serialize();
 
     eprint!("deriving key...");
     let key = crypto::derive_key(passphrase, &header)?;
@@ -37,7 +38,10 @@ pub fn seal(input: &Path, output: &Path, passphrase: &str) -> Result<()> {
     if input.is_dir() {
         tar_cmd.arg("-C").arg(input).arg(".");
     } else {
-        let parent = input.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
+        let parent = input
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
         let name = input.file_name().context("invalid input path")?;
         tar_cmd.arg("-C").arg(parent).arg(name);
     }
@@ -64,7 +68,7 @@ pub fn seal(input: &Path, output: &Path, passphrase: &str) -> Result<()> {
                 break;
             }
             let encrypted =
-                crypto::encrypt_chunk(&cipher, &header.nonce, counter, &chunk_buf[..n])?;
+                crypto::encrypt_chunk(&cipher, &header.nonce, counter, &chunk_buf[..n], &aad)?;
             out.write_all(&(encrypted.len() as u32).to_le_bytes())?;
             out.write_all(&encrypted)?;
             counter += 1;

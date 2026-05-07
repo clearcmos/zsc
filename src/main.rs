@@ -12,9 +12,10 @@ use std::process::Command;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use serde::Deserialize;
+use zeroize::Zeroizing;
 
 #[derive(Parser)]
-#[command(name = "zsc", about = "Encrypted compressed archives")]
+#[command(name = "zsc", version, about = "Encrypted compressed archives")]
 struct Cli {
     /// Encrypt a directory
     #[arg(short = 'e', conflicts_with_all = ["decrypt", "explore"])]
@@ -44,18 +45,20 @@ struct Config {
     passphrase_cmd: Option<String>,
 }
 
-fn load_config() -> Config {
+fn load_config() -> Result<Config> {
     let Some(config_dir) = dirs::config_dir() else {
-        return Config::default();
+        return Ok(Config::default());
     };
     let path = config_dir.join("zsc").join("config.toml");
-    let Ok(contents) = std::fs::read_to_string(&path) else {
-        return Config::default();
+    let contents = match std::fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Config::default()),
+        Err(e) => return Err(e).with_context(|| format!("cannot read {}", path.display())),
     };
-    toml::from_str(&contents).unwrap_or_default()
+    toml::from_str(&contents).with_context(|| format!("cannot parse {}", path.display()))
 }
 
-fn read_passphrase_cmd(cmd: &str) -> Result<String> {
+fn read_passphrase_cmd(cmd: &str) -> Result<Zeroizing<String>> {
     let output = Command::new("sh")
         .args(["-c", cmd])
         .output()
@@ -75,27 +78,27 @@ fn read_passphrase_cmd(cmd: &str) -> Result<String> {
         bail!("passphrase_cmd returned an empty passphrase");
     }
 
-    Ok(pass)
+    Ok(Zeroizing::new(pass))
 }
 
 fn read_passphrase(
     fd: Option<i32>,
     passphrase_cmd: Option<&str>,
     confirm: bool,
-) -> Result<String> {
+) -> Result<Zeroizing<String>> {
     let pass = if let Some(fd) = fd {
         let file = unsafe { std::fs::File::from_raw_fd(fd) };
         let mut reader = BufReader::new(file);
         let mut line = String::new();
         reader.read_line(&mut line)?;
-        line.trim_end_matches('\n').to_string()
+        Zeroizing::new(line.trim_end_matches('\n').to_string())
     } else if let Some(cmd) = passphrase_cmd {
         read_passphrase_cmd(cmd)?
     } else {
-        let pass = rpassword::prompt_password("Passphrase: ")?;
+        let pass = Zeroizing::new(rpassword::prompt_password("Passphrase: ")?);
         if confirm {
-            let pass2 = rpassword::prompt_password("Confirm: ")?;
-            if pass != pass2 {
+            let pass2 = Zeroizing::new(rpassword::prompt_password("Confirm: ")?);
+            if *pass != *pass2 {
                 bail!("passphrases do not match");
             }
         }
@@ -111,15 +114,13 @@ fn read_passphrase(
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let config = load_config();
+    let config = load_config()?;
 
     let passphrase_cmd = config.passphrase_cmd.as_deref();
 
-    let is_zsc = cli.input.extension().map_or(false, |e| e == "zsc");
-    let encrypt = cli.encrypt
-        || (!cli.decrypt && !cli.explore && !is_zsc && cli.input.exists());
-    let decrypt = cli.decrypt
-        || (!cli.encrypt && !cli.explore && is_zsc);
+    let is_zsc = cli.input.extension().is_some_and(|e| e == "zsc");
+    let encrypt = cli.encrypt || (!cli.decrypt && !cli.explore && !is_zsc && cli.input.exists());
+    let decrypt = cli.decrypt || (!cli.encrypt && !cli.explore && is_zsc);
 
     if !encrypt && !decrypt && !cli.explore {
         bail!("specify -e (encrypt), -d (decrypt), or --explore");
@@ -132,11 +133,13 @@ fn main() -> Result<()> {
         let passphrase = read_passphrase(cli.passphrase_fd, passphrase_cmd, confirm)?;
         let output = cli.output.unwrap_or_else(|| {
             let stem = if input.is_dir() {
-                input.file_name()
+                input
+                    .file_name()
                     .map(|s| s.to_string_lossy().into_owned())
                     .unwrap_or_else(|| "archive".to_string())
             } else {
-                input.file_stem()
+                input
+                    .file_stem()
                     .map(|s| s.to_string_lossy().into_owned())
                     .unwrap_or_else(|| "archive".to_string())
             };

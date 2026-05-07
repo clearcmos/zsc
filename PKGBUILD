@@ -7,7 +7,7 @@ url='https://github.com/clearcmos/zsc'
 license=('MIT')
 depends=(tar zstd xdg-utils)
 makedepends=(git rust)
-source=("$pkgname::git+ssh://git@github.com/clearcmos/zsc.git")
+source=("$pkgname::git+https://github.com/clearcmos/zsc.git")
 sha256sums=('SKIP')
 
 pkgver() {

@@ -20,6 +20,7 @@ pub fn open(file: &Path, output_dir: &Path, passphrase: &str) -> Result<()> {
         File::open(file).with_context(|| format!("cannot open {}", file.display()))?,
     );
     let header = ZscHeader::read_from(&mut input)?;
+    let aad = header.serialize();
 
     eprint!("deriving key...");
     let key = crypto::derive_key(passphrase, &header)?;
@@ -49,8 +50,7 @@ pub fn open(file: &Path, output_dir: &Path, passphrase: &str) -> Result<()> {
 
     let decrypt_result = (|| -> Result<()> {
         loop {
-            let chunk_len = format::read_chunk_len(&mut input)
-                .context("archive is truncated")?;
+            let chunk_len = format::read_chunk_len(&mut input).context("archive is truncated")?;
             if chunk_len == 0 {
                 break;
             }
@@ -61,7 +61,7 @@ pub fn open(file: &Path, output_dir: &Path, passphrase: &str) -> Result<()> {
                 .context("archive is truncated")?;
 
             let plaintext =
-                crypto::decrypt_chunk(&cipher, &header.nonce, counter, &ciphertext)?;
+                crypto::decrypt_chunk(&cipher, &header.nonce, counter, &ciphertext, &aad)?;
             writer.write_all(&plaintext)?;
             counter += 1;
         }
@@ -91,4 +91,3 @@ pub fn open(file: &Path, output_dir: &Path, passphrase: &str) -> Result<()> {
     eprintln!("extracted: {}", output_dir.display());
     Ok(())
 }
-

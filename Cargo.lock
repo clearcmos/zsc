@@ -986,4 +986,5 @@ dependencies = [
  "rpassword",
  "serde",
  "toml",
+ "zeroize",
 ]
