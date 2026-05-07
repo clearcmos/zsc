@@ -18,7 +18,7 @@ Benchmarked on 3.3 GB of mixed files (documents, images, videos) with an Intel i
 | Seal (compress + encrypt) | ~4s |
 | Open (decrypt + extract) | ~5s |
 
-For comparison: `zip` takes 48s for the same data. zsc's compression ratio is comparable (~9%).
+For comparison: `zip` takes 48s for the same data and achieves a similar size reduction (~9%).
 
 ## Install
 
@@ -49,16 +49,16 @@ Run the test suite with `cargo test --release`. Unit tests cover the crypto and 
 ## Usage
 
 ```
-# Encrypt a directory (auto-detected)
+# Encrypt a directory (auto-detected; creates photos.zsc)
 zsc photos/
 
-# Encrypt a single file
+# Encrypt a single file (creates document.zsc; extension is dropped)
 zsc document.pdf
 
 # Encrypt with custom output path
 zsc -e photos/ photos-backup.zsc
 
-# Decrypt and extract (auto-detected by .zsc extension)
+# Decrypt and extract (auto-detected by .zsc extension; extracts to photos/)
 zsc photos.zsc
 
 # Decrypt and extract to a specific directory

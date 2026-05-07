@@ -43,7 +43,7 @@ struct Cli {
     /// Input path (file/directory to encrypt, or .zsc archive to decrypt)
     input: PathBuf,
 
-    /// Output path (defaults to <input>.zsc for encrypt, <input-stem>/ for decrypt)
+    /// Output path. Encrypt default: <stem>.zsc for files, <dirname>.zsc for directories. Decrypt default: <stem>/
     output: Option<PathBuf>,
 }
 
