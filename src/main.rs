@@ -15,9 +15,16 @@ use serde::Deserialize;
 use zeroize::Zeroizing;
 
 #[derive(Parser)]
-#[command(name = "zsc", version, about = "Encrypted compressed archives")]
+#[command(
+    name = "zsc",
+    version,
+    about = "Encrypted compressed archives",
+    long_about = "Encrypted compressed archives.\n\n\
+        With no flag, the action is auto-detected from the input: a path ending \
+        in .zsc is decrypted, anything else is encrypted."
+)]
 struct Cli {
-    /// Encrypt a directory
+    /// Encrypt a file or directory
     #[arg(short = 'e', conflicts_with_all = ["decrypt", "explore"])]
     encrypt: bool,
 
@@ -25,18 +32,18 @@ struct Cli {
     #[arg(short = 'd', conflicts_with_all = ["encrypt", "explore"])]
     decrypt: bool,
 
-    /// Decrypt to tmpfs and open in archive viewer
+    /// Decrypt to tmpfs and open in the default archive viewer (Linux only)
     #[arg(long, conflicts_with_all = ["encrypt", "decrypt"])]
     explore: bool,
 
-    /// Read passphrase from this file descriptor
+    /// Read passphrase from this file descriptor (one line, trailing newline stripped)
     #[arg(long)]
     passphrase_fd: Option<i32>,
 
-    /// Input path (directory for -e, archive for -d/--explore)
+    /// Input path (file/directory to encrypt, or .zsc archive to decrypt)
     input: PathBuf,
 
-    /// Output path (archive for -e, directory for -d)
+    /// Output path (defaults to <input>.zsc for encrypt, <input-stem>/ for decrypt)
     output: Option<PathBuf>,
 }
 
