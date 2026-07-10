@@ -7,11 +7,23 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]   # macos-latest = Apple Silicon (aarch64)
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+      - name: Install zstd (runtime dep for seal/open)
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            brew install zstd
+          else
+            sudo apt-get update && sudo apt-get install -y zstd
+          fi
       - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       - run: cargo build --release --locked

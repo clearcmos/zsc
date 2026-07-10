@@ -1,2 +1,15 @@
-[build]
-rustflags = ['--cfg', 'chacha20_backend="avx2"', '-C', 'target-cpu=native']
+# Intentionally NO `target-cpu=native` and NO forced `chacha20_backend` here.
+#
+# Those baked x86 AVX2 instructions into the binary unconditionally, which:
+#   - SIGILLs (illegal instruction) on CPUs without AVX2 - including CI, whose
+#     runners are heterogeneous and where rust-cache may run a binary built on a
+#     different microarchitecture; and
+#   - cannot build/run at all on Apple Silicon (aarch64 has no AVX2).
+#
+# With them removed, the chacha20 crate runtime-detects the best SIMD backend
+# (AVX2/SSE2 on x86, NEON on aarch64, portable soft fallback otherwise). The
+# build is portable across Linux and macOS (Intel + Apple Silicon) and stays
+# fast on capable CPUs.
+#
+# For a max-speed build tuned to YOUR machine, opt in locally (not committed):
+#   RUSTFLAGS="-C target-cpu=native" cargo build --release
