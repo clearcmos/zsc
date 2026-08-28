@@ -30,8 +30,8 @@ jobs:
           title=$(jq -r '.title' <<<"$pr")
           echo "PR #$number: $title"
 
-          old_ver=$(grep -oP 'from \K[0-9]+(\.[0-9]+){1,2}' <<<"$title" | head -1)
-          new_ver=$(grep -oP 'to \K[0-9]+(\.[0-9]+){1,2}' <<<"$title" | head -1)
+          old_ver=$(grep -oP 'from \K[0-9]+(\.[0-9]+){1,2}' <<<"$title" | head -1 || true)
+          new_ver=$(grep -oP 'to \K[0-9]+(\.[0-9]+){1,2}' <<<"$title" | head -1 || true)
           if [ -z "$old_ver" ] || [ -z "$new_ver" ]; then
             echo "Could not parse versions; skipping."
             echo "merge=false" >> "$GITHUB_OUTPUT"
